@@ -3,7 +3,6 @@
 
 #include <string>
 #include <vector>
-
 #include "cpr/cprtypes.h"
 
 namespace cpr {

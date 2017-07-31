@@ -35,6 +35,8 @@ class Session::Impl {
     void SetBody(const Body& body);
     void SetLowSpeed(const LowSpeed& low_speed);
     void SetVerifySsl(const VerifySsl& verify);
+    void SetWriteHandler(const WriteHandler& handler);
+    void SetWriteHandler(WriteHandler&& handler);
 
     Response Delete();
     Response Get();
@@ -49,6 +51,7 @@ class Session::Impl {
     Url url_;
     Parameters parameters_;
     Proxies proxies_;
+	WriteHandler handler_;
 
     Response makeRequest(CURL* curl);
     static void freeHolder(CurlHolder* holder);
@@ -291,6 +294,14 @@ void Session::Impl::SetVerifySsl(const VerifySsl& verify) {
     }
 }
 
+void Session::Impl::SetWriteHandler(WriteHandler&& handler) {
+	handler_ = std::move(handler);
+}
+
+void Session::Impl::SetWriteHandler(const WriteHandler& handler) {
+	handler_ = handler;
+}
+
 Response Session::Impl::Delete() {
     auto curl = curl_->handle;
     if (curl) {
@@ -382,12 +393,19 @@ Response Session::Impl::makeRequest(CURL* curl) {
         curl_easy_setopt(curl, CURLOPT_PROXY, "");
     }
 
+	std::string response_string;
+	if (handler_.userCallback) {
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteHandler::writeFunction);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &handler_);
+	} else {
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, cpr::util::writeFunction);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_string);
+	}
+
     curl_->error[0] = '\0';
 
-    std::string response_string;
     std::string header_string;
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, cpr::util::writeFunction);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_string);
+	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, cpr::util::writeFunction);
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, &header_string);
 
     auto curl_error = curl_easy_perform(curl);
@@ -445,6 +463,8 @@ void Session::SetBody(const Body& body) { pimpl_->SetBody(body); }
 void Session::SetBody(Body&& body) { pimpl_->SetBody(std::move(body)); }
 void Session::SetLowSpeed(const LowSpeed& low_speed) { pimpl_->SetLowSpeed(low_speed); }
 void Session::SetVerifySsl(const VerifySsl& verify) { pimpl_->SetVerifySsl(verify); }
+void Session::SetWriteHandler(const WriteHandler& handler) { pimpl_->SetWriteHandler(handler); }
+void Session::SetWriteHandler(WriteHandler&& handler) { pimpl_->SetWriteHandler(std::move(handler)); }
 void Session::SetOption(const Url& url) { pimpl_->SetUrl(url); }
 void Session::SetOption(const Parameters& parameters) { pimpl_->SetParameters(parameters); }
 void Session::SetOption(Parameters&& parameters) { pimpl_->SetParameters(std::move(parameters)); }
@@ -465,6 +485,9 @@ void Session::SetOption(const Body& body) { pimpl_->SetBody(body); }
 void Session::SetOption(Body&& body) { pimpl_->SetBody(std::move(body)); }
 void Session::SetOption(const LowSpeed& low_speed) { pimpl_->SetLowSpeed(low_speed); }
 void Session::SetOption(const VerifySsl& verify) { pimpl_->SetVerifySsl(verify); }
+void Session::SetOption(const WriteHandler& handler) { pimpl_->SetWriteHandler(handler); }
+void Session::SetOption(WriteHandler&& handler) { pimpl_->SetWriteHandler(std::move(handler)); }
+
 Response Session::Delete() { return pimpl_->Delete(); }
 Response Session::Get() { return pimpl_->Get(); }
 Response Session::Head() { return pimpl_->Head(); }
